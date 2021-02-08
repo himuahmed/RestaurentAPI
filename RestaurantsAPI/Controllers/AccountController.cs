@@ -6,8 +6,11 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
 using AutoMapper;
+using Google.Apis.Auth;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.IIS.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using RestaurantsAPI.Data;
@@ -78,7 +81,7 @@ namespace RestaurantsAPI.Controllers
                 new Claim(ClaimTypes.Name, user.Name)
             };
             
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration.GetSection("AuthSetting:tokenKey").Value));
+            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_configuration.GetSection("AuthSetting:tokenKey").Value));
             var credential = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
             var tokenDescriptor = new SecurityTokenDescriptor()
             {
@@ -93,5 +96,73 @@ namespace RestaurantsAPI.Controllers
 
             return Ok(new {token = tokenHandler.WriteToken(token)});
         }
+
+        [HttpPost("login-facebook")]
+        public IActionResult FacebookLogin(string provider)
+        {
+            return Challenge(new AuthenticationProperties(), provider);
+        }
+
+        [HttpPost("login-google")]
+        public async Task<IActionResult> GoogleLogin(GoogleToken googleToken)
+        {
+            var result = await TokenValidation(googleToken.Token);
+            if (result == null)
+            {
+                return Unauthorized();
+            }
+
+            var user = await _userManager.FindByEmailAsync(result.Email);
+            if (user == null)
+                return Unauthorized();
+
+            var claims = new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Name, user.Name)
+            };
+
+            var key = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_configuration.GetSection("AuthSetting:tokenKey").Value));
+            var credential = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
+            var tokenDescriptor = new SecurityTokenDescriptor()
+            {
+                Subject = new ClaimsIdentity(claims),
+                Expires = DateTime.Now.AddHours(12),
+                SigningCredentials = credential
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+
+            return Ok(new { token = tokenHandler.WriteToken(token) });
+
+
+        }
+
+
+
+
+        public async Task<GoogleJsonWebSignature.Payload> TokenValidation(string googleToken)
+        {
+            if (string.IsNullOrWhiteSpace(googleToken))
+                return null;
+            try
+            {
+                //var validPayload = await GoogleJsonWebSignature.ValidateAsync(googleToken, new GoogleJsonWebSignature.ValidationSettings
+                //{
+                //    Audience = new []{ "259809587763 - dt6hnndh1gm3cpsjg968u483cob7kjc0.apps.googleusercontent.com"}
+                //});
+                var validPayload = await GoogleJsonWebSignature.ValidateAsync(googleToken);
+                return validPayload;
+            }
+            catch (Exception e)
+            {
+                return null;
+            }
+            
+        }
+
+
     }
 }

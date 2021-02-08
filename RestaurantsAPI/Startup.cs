@@ -43,14 +43,14 @@ namespace RestaurantsAPI
                 option.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Configuration.GetSection(("AuthSetting:tokenKey")).Value)),
+                    IssuerSigningKey =
+                        new SymmetricSecurityKey(
+                            Encoding.ASCII.GetBytes(Configuration.GetSection("AuthSetting:tokenKey").Value)),
                     ValidateIssuer = false,
                     ValidateAudience = false
-                    
+
                 };
             });
-
-
 
             services.Configure<IdentityOptions>(option =>
             {
@@ -75,11 +75,11 @@ namespace RestaurantsAPI
             }
 
             app.UseHttpsRedirection();
-
+            app.UseAuthentication();
             app.UseRouting();
 
             app.UseAuthorization();
-            app.UseAuthentication();
+            
 
             app.UseEndpoints(endpoints =>
             {
